@@ -1,27 +1,29 @@
 from fastapi import FastAPI
-from detoxify import Detoxify
-from fastapi.responses import JSONResponse
+from transformers import pipeline
 
 app = FastAPI()
 
-model = Detoxify("original")
+moderator = pipeline(
+    "text-classification",
+    model="unitary/toxic-bert",
+    top_k=None
+)
 
 THRESHOLDS = {
-    "toxicity": 0.60,
-    "severe_toxicity": 0.40,
+    "toxic": 0.50,
+    "severe_toxic": 0.40,
     "obscene": 0.50,
     "threat": 0.30,
     "insult": 0.65,
-    "identity_attack": 0.40
+    "identity_hate": 0.40
 }
 
 @app.get("/moderate")
 def moderate(text: str):
 
-    scores = model.predict(text)
+    results = moderator(text)[0]
 
-    # convert numpy → float
-    scores = {k: round(float(v), 2) for k, v in scores.items()}
+    scores = {item["label"]: round(float(item["score"]), 2) for item in results}
 
     safe = True
 
@@ -30,7 +32,7 @@ def moderate(text: str):
             safe = False
             break
 
-    return JSONResponse(content={
+    return {
         "safe": safe,
         "scores": scores
-    })
+    }
